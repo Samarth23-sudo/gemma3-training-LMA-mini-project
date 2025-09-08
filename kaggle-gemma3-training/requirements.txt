@@ -1,0 +1,18 @@
+# Core dependencies
+torch>=2.1.0
+numpy>=1.24.0
+sentencepiece>=0.1.99
+tqdm>=4.64.0
+
+# Training utilities
+accelerate>=0.21.0
+transformers>=4.30.0  # Optional, for some utilities
+
+# Data processing
+datasets>=2.14.0  # Optional, for additional data utilities
+
+# Logging and monitoring (optional)
+wandb>=0.15.0  # Optional, for experiment tracking
+
+# Development and testing
+pytest>=7.0.0  # Optional, for testing
