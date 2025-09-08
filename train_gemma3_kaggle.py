@@ -132,8 +132,9 @@ def main():
     parser = argparse.ArgumentParser(description='Train Gemma 3 on Kaggle with multilingual corpus')
     
     # Model configuration
-    parser.add_argument('--model_size', type=str, default='1b', choices=['1b', '2b'],
-                       help='Model size to train')
+    parser.add_argument('--model_size', type=str, default='200m', 
+                       choices=['150m', '200m', '1b', '2b'],
+                       help='Model size to train (150m≈150M params, 200m≈200M params, 1b≈1B params, 2b≈2B params)')
     parser.add_argument('--vocab_size', type=int, default=None,
                        help='Vocabulary size (auto-detected from tokenizer if not provided)')
     
@@ -208,6 +209,7 @@ def main():
         from training.trainer import GemmaTrainer
         from training.checkpoint_manager import CheckpointManager
         from configs.gemma3_config import (
+            get_custom_gemma3_150m_config, get_custom_gemma3_200m_config,
             get_custom_gemma3_1b_config, get_custom_gemma3_2b_config,
             get_training_config, validate_config, estimate_memory_usage
         )
@@ -258,7 +260,11 @@ def main():
     vocab_size = args.vocab_size if args.vocab_size else actual_vocab_size
     
     try:
-        if args.model_size == '1b':
+        if args.model_size == '150m':
+            model_config = get_custom_gemma3_150m_config(vocab_size, args.tokenizer_path)
+        elif args.model_size == '200m':
+            model_config = get_custom_gemma3_200m_config(vocab_size, args.tokenizer_path)
+        elif args.model_size == '1b':
             model_config = get_custom_gemma3_1b_config(vocab_size, args.tokenizer_path)
         elif args.model_size == '2b':
             model_config = get_custom_gemma3_2b_config(vocab_size, args.tokenizer_path)
@@ -268,7 +274,7 @@ def main():
         # Validate configuration
         validate_config(model_config, actual_vocab_size)
         
-        logger.info(f"Model config: {args.model_size} ({model_config.num_hidden_layers} layers)")
+        logger.info(f"Model config: {args.model_size} ({model_config.num_hidden_layers} layers, {model_config.hidden_size} hidden size)")
         
     except Exception as e:
         logger.error(f"Failed to create model configuration: {e}")

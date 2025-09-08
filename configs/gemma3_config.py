@@ -53,6 +53,110 @@ except ImportError:
         rope_scaling_factor: Optional[int] = None
 
 
+def get_custom_gemma3_200m_config(vocab_size: int, tokenizer_path: str) -> GemmaConfig:
+    """
+    Custom Gemma 3 configuration for ~200M parameters
+    Optimized for multilingual training with custom tokenizer
+    
+    Architecture choices for 200M parameters:
+    - 12 layers (reduced from 28)
+    - 768 hidden size (reduced from 3072)  
+    - 12 attention heads (reduced from 16)
+    - 3072 intermediate size (reduced from 24576)
+    """
+    return GemmaConfig(
+        # Model architecture
+        architecture=Architecture.GEMMA_3,
+        vocab_size=vocab_size,
+        max_position_embeddings=4096,  # Reduced from 8192 for efficiency
+        
+        # Core architecture - optimized for ~200M params
+        num_hidden_layers=12,           # Key reduction: 12 instead of 28 layers
+        hidden_size=768,               # Reduced: 768 instead of 3072
+        num_attention_heads=12,        # Reduced: 12 instead of 16 heads
+        num_key_value_heads=12,        # Match attention heads
+        head_dim=64,                   # 768 / 12 = 64
+        intermediate_size=3072,        # 4x hidden_size (768 * 4)
+        
+        # Normalization
+        rms_norm_eps=1e-6,
+        
+        # Data type and quantization
+        dtype='bfloat16',
+        quant=False,
+        
+        # Tokenizer
+        tokenizer=tokenizer_path,
+        
+        # Attention configuration for Gemma 3
+        attn_types=[AttentionType.GLOBAL] * 12,  # All global attention for smaller model
+        
+        # Gemma 3 specific features
+        final_logit_softcapping=30.0,
+        attn_logit_softcapping=50.0,
+        query_pre_attn_scalar=144,  # sqrt(head_dim^2) for head_dim=64
+        
+        # Layer norm configuration
+        use_pre_ffw_norm=True,
+        use_post_ffw_norm=True,
+        
+        # RoPE configuration
+        rope_wave_length={AttentionType.GLOBAL: 10000}
+    )
+
+
+def get_custom_gemma3_150m_config(vocab_size: int, tokenizer_path: str) -> GemmaConfig:
+    """
+    Custom Gemma 3 configuration for ~150M parameters
+    Even more compact for faster training
+    
+    Architecture choices for 150M parameters:
+    - 10 layers 
+    - 640 hidden size
+    - 10 attention heads
+    - 2560 intermediate size
+    """
+    return GemmaConfig(
+        # Model architecture
+        architecture=Architecture.GEMMA_3,
+        vocab_size=vocab_size,
+        max_position_embeddings=2048,  # Further reduced for efficiency
+        
+        # Core architecture - optimized for ~150M params
+        num_hidden_layers=10,           # Very compact: 10 layers
+        hidden_size=640,               # Compact: 640 
+        num_attention_heads=10,        # 10 heads
+        num_key_value_heads=10,        # Match attention heads
+        head_dim=64,                   # 640 / 10 = 64
+        intermediate_size=2560,        # 4x hidden_size (640 * 4)
+        
+        # Normalization
+        rms_norm_eps=1e-6,
+        
+        # Data type and quantization
+        dtype='bfloat16',
+        quant=False,
+        
+        # Tokenizer
+        tokenizer=tokenizer_path,
+        
+        # Attention configuration for Gemma 3
+        attn_types=[AttentionType.GLOBAL] * 10,  # All global attention
+        
+        # Gemma 3 specific features
+        final_logit_softcapping=30.0,
+        attn_logit_softcapping=50.0,
+        query_pre_attn_scalar=144,  # sqrt(head_dim^2) for head_dim=64
+        
+        # Layer norm configuration
+        use_pre_ffw_norm=True,
+        use_post_ffw_norm=True,
+        
+        # RoPE configuration
+        rope_wave_length={AttentionType.GLOBAL: 10000}
+    )
+
+
 def get_custom_gemma3_1b_config(vocab_size: int, tokenizer_path: str) -> GemmaConfig:
     """
     Custom 1B Gemma 3 configuration adapted for your tokenizer
@@ -184,7 +288,7 @@ def get_training_config(model_size: str = "1b", kaggle_optimized: bool = True):
     Get training configuration optimized for Kaggle
     
     Args:
-        model_size: Model size ("1b" or "2b")
+        model_size: Model size ("150m", "200m", "1b", or "2b")
         kaggle_optimized: Whether to use Kaggle-optimized settings
         
     Returns:
@@ -196,7 +300,29 @@ def get_training_config(model_size: str = "1b", kaggle_optimized: bool = True):
     
     config = TrainingConfig()
     
-    if model_size == "1b":
+    if model_size == "150m":
+        # 150M model settings - fastest training, least memory
+        config.learning_rate = 3e-4  # Higher LR for smaller model
+        config.min_lr = 3e-6
+        config.weight_decay = 0.01
+        config.warmup_steps = 1000   # Less warmup needed
+        config.max_steps = 30000 if not kaggle_optimized else 15000
+        config.batch_size = 8 if not kaggle_optimized else 4  # Larger batch possible
+        config.gradient_accumulation_steps = 4 if not kaggle_optimized else 8
+        config.max_length = 2048
+        
+    elif model_size == "200m":
+        # 200M model settings - good balance of speed and capacity
+        config.learning_rate = 2.5e-4
+        config.min_lr = 2.5e-6
+        config.weight_decay = 0.01
+        config.warmup_steps = 1500
+        config.max_steps = 35000 if not kaggle_optimized else 18000
+        config.batch_size = 6 if not kaggle_optimized else 3
+        config.gradient_accumulation_steps = 6 if not kaggle_optimized else 12
+        config.max_length = 2048
+        
+    elif model_size == "1b":
         # 1B model settings
         config.learning_rate = 2e-4
         config.min_lr = 2e-6
